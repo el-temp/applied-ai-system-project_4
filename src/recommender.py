@@ -1,6 +1,9 @@
 import csv
+import json
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+
+import anthropic
 
 @dataclass
 class Song:
@@ -102,3 +105,88 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
     scored = [(song, *score_song(user_prefs, song)) for song in songs]
     scored.sort(key=lambda entry: entry[1], reverse=True)
     return scored[:k]
+
+
+def _energy_descriptor(target_energy: float) -> str:
+    """Converts a 0-1 energy value into a search-friendly phrase."""
+    if target_energy >= 0.7:
+        return "high-energy, upbeat"
+    if target_energy >= 0.4:
+        return "moderate-energy"
+    return "low-energy, mellow"
+
+
+def _build_search_query(user_prefs: Dict) -> str:
+    """
+    Turns the raw user profile fields (numeric energy, boolean acoustic flag)
+    into a natural-language phrase that reads like something a person would
+    type into a search engine, so web search actually returns song results.
+    """
+    energy_phrase = _energy_descriptor(user_prefs["target_energy"])
+    acoustic_phrase = "acoustic" if user_prefs["likes_acoustic"] else "non-acoustic/produced"
+    return (
+        f"{energy_phrase} {user_prefs['favorite_genre']} songs with a "
+        f"{user_prefs['favorite_mood']} mood, {acoustic_phrase} sound"
+    )
+
+
+MAX_DISCOVERED_SONGS = 2
+
+
+def discover_songs_with_rag(user_prefs: Dict, catalog_songs: List[Dict], k: int = MAX_DISCOVERED_SONGS) -> List[Dict]:
+    """
+    Uses Claude with web search to look up real songs matching the user's
+    preferences that are not present in the local catalog. Returns a list of
+    dicts with "title", "artist", and "reason", or an empty list on failure
+    (e.g. missing API credentials or an unparsable response).
+
+    Always returns at most MAX_DISCOVERED_SONGS (2) songs, regardless of `k`.
+    """
+    k = max(1, min(k, MAX_DISCOVERED_SONGS))
+    client = anthropic.Anthropic()
+
+    known_tracks = "\n".join(f"- {s['title']} by {s['artist']}" for s in catalog_songs)
+    search_query = _build_search_query(user_prefs)
+
+    prompt = (
+        "You are helping a music recommendation system find fresh suggestions.\n"
+        f"Search the web using a query like: \"{search_query}\" (adjust wording as "
+        "needed to get good results — for example try genre + mood + \"songs\" or "
+        "\"playlist\", rather than the raw phrase verbatim).\n\n"
+        f"Find ONLY {k} real, currently existing song(s) that fit this description "
+        f"— no more than {k}, even if you find more good candidates. "
+        f"Do NOT suggest any song already in this catalog:\n"
+        f"{known_tracks}\n\n"
+        "Respond with ONLY a JSON array and no other text, containing at most "
+        f"{k} item(s). Each item must have the keys \"title\", \"artist\", and "
+        '"reason" (a short one-sentence reason it fits the user\'s preferences). '
+        "If you cannot find any good matches, return an empty array rather than "
+        "inventing songs that don't exist."
+    )
+
+    try:
+        response = client.messages.create(
+            model="claude-opus-5",
+            max_tokens=2048,
+            tools=[{"type": "web_search_20260209", "name": "web_search"}],
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except (anthropic.APIError, TypeError) as e:
+        print(f"[discover_songs_with_rag] API call failed: {e}")
+        return []
+
+    text = "".join(block.text for block in response.content if block.type == "text")
+    start, end = text.find("["), text.rfind("]")
+    if start == -1 or end == -1:
+        print(f"[discover_songs_with_rag] No JSON array found in response: {text!r}")
+        return []
+
+    try:
+        discovered = json.loads(text[start:end + 1])
+    except json.JSONDecodeError as e:
+        print(f"[discover_songs_with_rag] Failed to parse JSON: {e}\nRaw text: {text!r}")
+        return []
+
+    if not isinstance(discovered, list):
+        return []
+    return discovered[:MAX_DISCOVERED_SONGS]

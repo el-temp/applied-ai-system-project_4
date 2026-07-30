@@ -9,7 +9,7 @@ You will implement the functions in recommender.py:
 - recommend_songs
 """
 
-from src.recommender import load_songs, recommend_songs
+from recommender import load_songs, recommend_songs, discover_songs_with_rag
 
 # Three distinct user preference profiles, plus adversarial / edge case
 # profiles designed to see if the scoring logic can be "tricked" or
@@ -72,6 +72,17 @@ def main() -> None:
             for reason in reasons:
                 print(f"   - {reason}")
             print()
+
+        print("Discovering additional songs outside the catalog (RAG + web search)...")
+        discovered = discover_songs_with_rag(user_prefs, songs)
+        if discovered:
+            print("\nYou might also like (not in our catalog):\n")
+            for item in discovered:
+                print(f"- {item.get('title')} by {item.get('artist')}")
+                print(f"   - {item.get('reason')}")
+            print()
+        else:
+            print("(No additional songs discovered.)\n")
 
 
 if __name__ == "__main__":
