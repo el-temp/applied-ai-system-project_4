@@ -1,0 +1,38 @@
+%%{init: {'theme': 'neutral'}}%%
+flowchart TD
+    subgraph INPUT["1. INPUT"]
+        USER["User Profile\n(favorite_genre, favorite_mood,\ntarget_energy, likes_acoustic)"]
+        CSV["data/songs.csv\n(local song catalog)"]
+    end
+
+    subgraph PROCESS["2. PROCESS"]
+        LOADER["load_songs()\nsrc/recommender.py"]
+        SCORER["score_song() / recommend_songs()\nrule-based scoring engine"]
+        AGENT["discover_songs_with_rag()\nClaude agent + web_search tool"]
+        QUERY["_build_search_query()\nturns profile into NL search query"]
+    end
+
+    subgraph OUTPUT["3. OUTPUT"]
+        TOPK["Top-K catalog recommendations\n(song, score, reasons)"]
+        DISCOVERED["Discovered songs\n(title, artist, reason)\nmax 2, outside catalog"]
+        CLI["src/main.py\nprints results to console"]
+    end
+
+    subgraph CHECK["4. Human & Automated Checking"]
+        TESTS["tests/test_recommender.py\nunit tests on scoring logic"]
+        VERIFY["scripts/verify_rag_reliability.py\nchecks size compliance +\nrun-to-run consistency (Jaccard)"]
+        HUMAN["Human review\n(reads printed reasons/output,\njudges relevance of AI picks)"]
+    end
+
+    USER --> SCORER
+    CSV --> LOADER --> SCORER
+    USER --> QUERY --> AGENT
+    CSV --> AGENT
+
+    SCORER --> TOPK --> CLI
+    AGENT --> DISCOVERED --> CLI
+
+    SCORER -. validated by .-> TESTS
+    AGENT -. validated by .-> VERIFY
+    CLI --> HUMAN
+    VERIFY -. flags low-consistency\nor size violations .-> HUMAN
