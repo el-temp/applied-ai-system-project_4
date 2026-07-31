@@ -9,7 +9,13 @@ You will implement the functions in recommender.py:
 - recommend_songs
 """
 
+import logging
+import sys
+
 from recommender import load_songs, recommend_songs, discover_songs_with_rag
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 # Three distinct user preference profiles, plus adversarial / edge case
 # profiles designed to see if the scoring logic can be "tricked" or
@@ -58,7 +64,15 @@ PROFILES = {
 
 
 def main() -> None:
-    songs = load_songs("data/songs.csv")
+    try:
+        songs = load_songs("data/songs.csv")
+    except FileNotFoundError:
+        logger.error("Could not find data/songs.csv — run this script from the project root.")
+        sys.exit(1)
+
+    if not songs:
+        logger.warning("No songs were loaded from data/songs.csv; nothing to recommend.")
+        return
 
     for name, user_prefs in PROFILES.items():
         print("=" * 60)
@@ -69,8 +83,8 @@ def main() -> None:
         recommendations = recommend_songs(user_prefs, songs, k=5)
 
         print("\nTop recommendations:\n")
-        for rank, (song, score, reasons) in enumerate(recommendations, start=1):
-            print(f"{rank}. {song['title']} by {song['artist']} — Score: {score:.2f}")
+        for rank, (song, score, reasons, confidence) in enumerate(recommendations, start=1):
+            print(f"{rank}. {song['title']} by {song['artist']} — Score: {score:.2f} (confidence: {confidence:.0%})")
             for reason in reasons:
                 print(f"   - {reason}")
             print()
@@ -80,7 +94,7 @@ def main() -> None:
         if discovered:
             print("\nYou might also like (not in our catalog):\n")
             for item in discovered:
-                print(f"- {item.get('title')} by {item.get('artist')}")
+                print(f"- {item.get('title')} by {item.get('artist')} (confidence: {item.get('confidence', 0):.0%})")
                 print(f"   - {item.get('reason')}")
             print()
         else:

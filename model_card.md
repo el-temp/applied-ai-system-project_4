@@ -46,6 +46,8 @@ Prompts:
 
 The are 17 songs in the catelouge each having id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness. The genres represented are  pop, lofi, rock, ambient, jazz, synthwave, indie pop, classical, metal, house, r&b, folk, hip hop, dream pop. The moods represented are happy, chill, intense, relaxed, moody, focused, nostalgic, angry, euphoric, romantic, melancholic, playful, dreamy. 7 songs in the daatset were added by me for more variety. There are infinite genres and moods that could be applied for this recomender but thse songs act as a reasonable sample to include.
 
+Project 4 Update: With the implementaitn of RAG two new songs will be recomneded but are instead pulled from gemeni. While this does not include a google search it does still allow this model to incorporate near limitless songs without having them in the database. 
+
 ## 5. Strengths  
 
 Where does your system seem to work well  
@@ -70,6 +72,8 @@ Prompts:
 - Ways the scoring might unintentionally favor some users  
 
 The biggest issue with is recomnder is its simplicity. Almost every song in the dataset has a unique genre so it gives an unrealsitc equal weight to evrything and only allows songs to be categorized as one genre which is not always true. Additionally there is no way to change the weighting of the preferences a genre or mood match is always plus 2 points compared to the maximum 1 point from the other 2 characteristics. This favors users for consider the most important aspect of song genre or mood, and negelcts users who really want accoustics in song. 
+
+Project 4 Update: The AI is limited by not having google search therefore it can only use the training data already present in the model. This also means it is subject to the biases in that training data which I can not account for.
 
 ## 7. Evaluation  
 

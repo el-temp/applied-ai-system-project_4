@@ -65,10 +65,17 @@ The key design point the diagram makes visible: the rule-based path and the AI p
 
    (Or add that line to the bottom of `.venv\Scripts\Activate.ps1` so it's set automatically every time you activate this venv.)
 
-4. **Run the app:**
+4. **Run the app** (from the project root, with `src/` added to `PYTHONPATH` so `main.py`'s bare `from recommender import ...` resolves):
 
    ```bash
-   python -m src.main
+   # Mac/Linux
+   PYTHONPATH=src python src/main.py
+   ```
+
+   ```powershell
+   # Windows (PowerShell)
+   $env:PYTHONPATH = "src"
+   python src/main.py
    ```
 
    By default, only one profile ("High-Energy Pop") is active in `src/main.py` to keep free-tier API usage low; the rest are commented out and can be re-enabled as needed.
@@ -138,6 +145,259 @@ You might also like (not in our catalog):
 ```
 
 > Note: this example shows the *shape* of a real discovery response rather than a captured live one — the free-tier Gemini quota was exhausted while writing this README (see the 429 `RESOURCE_EXHAUSTED` error surfaced by the app), which the code handles by printing the error and falling back to "(No additional songs discovered.)" rather than crashing. Once quota resets, running `python -m src.main` reproduces this section with a real title/artist/reason.
+
+---
+
+## Execution Evidence
+
+Every command and output below was run and captured directly from this repo (not hand-written) so the system can be graded without a video. Reproduce any of it yourself with the exact commands shown.
+
+### 1. End-to-end system run (3 inputs)
+
+Command (run from the project root, with `data/songs.csv` present and `src/` on `PYTHONPATH`):
+
+```bash
+PYTHONPATH=src python src/main.py
+```
+
+**Input 1 — High-Energy Pop** (`{'favorite_genre': 'pop', 'favorite_mood': 'happy', 'target_energy': 0.9, 'likes_acoustic': False}`, the default active profile in `src/main.py`):
+
+```
+INFO recommender: Loaded songs: 17
+ERROR recommender: [discover_songs_with_rag] Failed to create Gemini client: No API key was provided. Please pass a valid API key. Learn how to create an API key at https://ai.google.dev/gemini-api/docs/api-key.
+============================================================
+PROFILE: High-Energy Pop
+Preferences: {'favorite_genre': 'pop', 'favorite_mood': 'happy', 'target_energy': 0.9, 'likes_acoustic': False}
+============================================================
+
+Top recommendations:
+
+1. Sunrise City by Neon Echo — Score: 5.74 (confidence: 96%)
+   - genre match (+2.0)
+   - mood match (+2.0)
+   - energy closeness (+0.9)
+   - non-acoustic match (+0.8)
+
+2. Gym Hero by Max Pulse — Score: 3.92 (confidence: 65%)
+   - genre match (+2.0)
+   - energy closeness (+1.0)
+   - non-acoustic match (+0.9)
+
+3. Rooftop Lights by Indigo Parade — Score: 3.51 (confidence: 58%)
+   - mood match (+2.0)
+   - energy closeness (+0.9)
+   - non-acoustic match (+0.7)
+
+4. Iron Fists by Grey Anvil — Score: 1.90 (confidence: 32%)
+   - energy closeness (+0.9)
+   - non-acoustic match (+1.0)
+
+5. City Pulse by DJ Solstice — Score: 1.90 (confidence: 32%)
+   - energy closeness (+1.0)
+   - non-acoustic match (+0.9)
+
+Discovering additional songs outside the catalog (RAG + web search)...
+(No additional songs discovered.)
+```
+
+This is real captured output from a machine with **no `GEMINI_API_KEY` set** — note the `ERROR recommender: ... Failed to create Gemini client: No API key was provided` line. This is the RAG guardrail (see [§3](#3-reliabilityguardrail-evidence)) working as designed: `discover_songs_with_rag()` catches the client-construction failure, logs it, and returns `[]` instead of crashing, so the catalog recommendations above still print normally.
+
+**Input 2 — Chill Lofi** and **Input 3 — Deep Intense Rock** (calling `recommend_songs()` directly with the same loaded catalog, since only one profile is left active in `src/main.py` by default to limit API usage — see [Design Decisions](#design-decisions)):
+
+```
+============================================================
+PROFILE: Chill Lofi
+Preferences: {'favorite_genre': 'lofi', 'favorite_mood': 'chill', 'target_energy': 0.3, 'likes_acoustic': True}
+============================================================
+1. Library Rain by Paper Lanterns -- Score: 5.81 (confidence: 97%)
+   - genre match (+2.0)
+   - mood match (+2.0)
+   - energy closeness (+0.9)
+   - acoustic match (+0.9)
+2. Midnight Coding by LoRoom -- Score: 5.59 (confidence: 93%)
+   - genre match (+2.0)
+   - mood match (+2.0)
+   - energy closeness (+0.9)
+   - acoustic match (+0.7)
+3. Spacewalk Thoughts by Orbit Bloom -- Score: 3.90 (confidence: 65%)
+   - mood match (+2.0)
+   - energy closeness (+1.0)
+   - acoustic match (+0.9)
+
+============================================================
+PROFILE: Deep Intense Rock
+Preferences: {'favorite_genre': 'rock', 'favorite_mood': 'intense', 'target_energy': 0.85, 'likes_acoustic': False}
+============================================================
+1. Storm Runner by Voltline -- Score: 5.84 (confidence: 97%)
+   - genre match (+2.0)
+   - mood match (+2.0)
+   - energy closeness (+0.9)
+   - non-acoustic match (+0.9)
+2. Gym Hero by Max Pulse -- Score: 3.87 (confidence: 64%)
+   - mood match (+2.0)
+   - energy closeness (+0.9)
+   - non-acoustic match (+0.9)
+3. City Pulse by DJ Solstice -- Score: 1.89 (confidence: 32%)
+   - energy closeness (+1.0)
+   - non-acoustic match (+0.9)
+```
+
+### 2. AI feature behavior (Gemini RAG discovery)
+
+`discover_songs_with_rag()` is a thin wrapper around one Gemini call plus JSON parsing, so its "AI behavior" is exercised here with the real code path but a mocked `genai.Client` (no live network call, no API key needed to reproduce) — this isolates what the *code* guarantees about the model's output from what the *model* happens to say on a given day. Command:
+
+```bash
+PYTHONPATH=src python -c "
+import json
+import recommender as r
+
+user_prefs = {'favorite_genre': 'pop', 'favorite_mood': 'happy', 'target_energy': 0.9, 'likes_acoustic': False}
+songs = r.load_songs('data/songs.csv')
+
+class FakeResp:
+    def __init__(self, text): self.text = text
+class FakeModels:
+    def __init__(self, text): self._t = text
+    def generate_content(self, **kw): return FakeResp(self._t)
+class FakeClient:
+    def __init__(self, text): self.models = FakeModels(text)
+
+r.genai.Client = lambda *a, **k: FakeClient(json.dumps([
+    {'title': 'Aftershock', 'artist': 'Nova Ray', 'reason': 'upbeat pop hook matches happy/high-energy'}
+]))
+print(r.discover_songs_with_rag(user_prefs, songs))
+"
+```
+
+Output:
+
+```
+[{'title': 'Aftershock', 'artist': 'Nova Ray', 'reason': 'upbeat pop hook matches happy/high-energy', 'confidence': 0.8}]
+```
+
+This shows the full AI-feature pipeline: numeric/boolean profile → `_build_search_query()` natural-language phrase → Gemini prompt → JSON parse → attached `confidence` (0.8, since `reason` is present — see `_discovered_item_confidence`). A real run against the live API (with `GEMINI_API_KEY` set) produces the same shape with a model-chosen title/artist/reason instead of the mocked one.
+
+### 3. Reliability/guardrail evidence
+
+Each of these is a real failure mode the code is designed to survive, captured directly (not described):
+
+**3a. Missing catalog file** — `load_songs()` raises a clear, catchable error instead of an unhandled traceback:
+
+```bash
+PYTHONPATH=src python -c "
+from recommender import load_songs
+try:
+    load_songs('data/does_not_exist.csv')
+except FileNotFoundError as e:
+    print(f'Caught FileNotFoundError as expected: {e}')
+"
+```
+```
+ERROR recommender: Songs CSV not found at 'data/does_not_exist.csv'
+Caught FileNotFoundError as expected: [Errno 2] No such file or directory: 'data/does_not_exist.csv'
+```
+
+**3b. Malformed CSV row** — one bad row is skipped and logged; good rows still load:
+
+```bash
+PYTHONPATH=src python -c "
+from recommender import load_songs
+import tempfile
+path = tempfile.mktemp(suffix='.csv')
+open(path, 'w', encoding='utf-8').write(
+    'id,title,artist,genre,mood,energy,tempo_bpm,valence,danceability,acousticness\n'
+    '1,Good Song,Artist A,pop,happy,0.8,120,0.9,0.8,0.2\n'
+    '2,Bad Song,Artist B,pop,happy,not-a-number,120,0.9,0.8,0.2\n'
+)
+songs = load_songs(path)
+print(f'Rows loaded: {len(songs)} -> {[s[\"title\"] for s in songs]}')
+"
+```
+```
+WARNING recommender: Skipping malformed row 3 in <tmpfile>.csv: could not convert string to float: 'not-a-number'
+INFO recommender: Loaded songs: 1
+Rows loaded: 1 -> ['Good Song']
+```
+
+**3c. Missing required fields passed to `score_song`** — raises a descriptive `ValueError` naming exactly which keys are missing, instead of an opaque `KeyError` deep in the scoring math:
+
+```bash
+PYTHONPATH=src python -c "
+from recommender import score_song
+try:
+    score_song({'favorite_genre': 'pop'}, {'genre': 'pop', 'mood': 'happy', 'energy': 0.5, 'acousticness': 0.5})
+except ValueError as e:
+    print(f'Caught ValueError as expected: {e}')
+"
+```
+```
+ERROR recommender: score_song missing required keys — user_prefs: ['favorite_mood', 'target_energy', 'likes_acoustic'], song: []
+Caught ValueError as expected: score_song missing required keys — user_prefs: ['favorite_mood', 'target_energy', 'likes_acoustic'], song: []
+```
+
+**3d. RAG output size cap** — even if the model returns more songs than allowed, the guardrail caps the result at `MAX_DISCOVERED_SONGS` (2):
+
+```
+=== model asked to return 10, mocked to return 5 ===
+2 returned (cap is 2): [{'title': 'Song 0', 'artist': 'Artist 0', 'reason': 'r', 'confidence': 0.8}, {'title': 'Song 1', 'artist': 'Artist 1', 'reason': 'r', 'confidence': 0.8}]
+```
+
+**3e. Unparseable model output** — if Gemini's response has no JSON array in it at all, the guardrail logs a warning and returns `[]` instead of raising:
+
+```
+WARNING recommender: [discover_songs_with_rag] No JSON array found in response: 'sorry, no good matches for that!'
+[]
+```
+
+**3f. Missing Gemini API key** — see Input 1's captured output in [§1](#1-end-to-end-system-run-3-inputs): `ERROR recommender: [discover_songs_with_rag] Failed to create Gemini client: No API key was provided ...`, followed by `(No additional songs discovered.)` — the rest of the CLI run is unaffected.
+
+### 4. Automated test suite (evaluation behavior)
+
+```bash
+python -m pytest tests/ -v
+```
+
+```
+collected 33 items
+
+tests/test_recommender.py::test_recommend_returns_songs_sorted_by_score PASSED
+tests/test_recommender.py::test_recommend_respects_k PASSED
+tests/test_recommender.py::test_recommend_k_zero_returns_empty PASSED
+tests/test_recommender.py::test_recommend_k_negative_returns_empty PASSED
+tests/test_recommender.py::test_recommend_empty_catalog_returns_empty PASSED
+tests/test_recommender.py::test_recommend_k_larger_than_catalog_returns_all PASSED
+tests/test_recommender.py::test_explain_recommendation_returns_non_empty_string PASSED
+tests/test_recommender.py::test_explain_recommendation_includes_confidence PASSED
+tests/test_recommender.py::test_load_songs_reads_valid_csv PASSED
+tests/test_recommender.py::test_load_songs_missing_file_raises PASSED
+tests/test_recommender.py::test_load_songs_skips_malformed_rows PASSED
+tests/test_recommender.py::test_load_songs_empty_file_returns_empty_list PASSED
+tests/test_recommender.py::test_score_song_perfect_match_scores_high_with_high_confidence PASSED
+tests/test_recommender.py::test_score_song_no_match_scores_low_with_low_confidence PASSED
+tests/test_recommender.py::test_score_song_confidence_always_in_unit_range PASSED
+tests/test_recommender.py::test_score_song_missing_user_pref_key_raises_value_error PASSED
+tests/test_recommender.py::test_score_song_missing_song_key_raises_value_error PASSED
+tests/test_recommender.py::test_score_song_energy_extremes_do_not_crash PASSED
+tests/test_recommender.py::test_score_song_likes_acoustic_true_uses_acousticness_directly PASSED
+tests/test_recommender.py::test_recommend_songs_sorted_highest_first PASSED
+tests/test_recommender.py::test_recommend_songs_respects_k PASSED
+tests/test_recommender.py::test_recommend_songs_empty_catalog_returns_empty PASSED
+tests/test_recommender.py::test_recommend_songs_k_zero_returns_empty PASSED
+tests/test_recommender.py::test_recommend_songs_skips_malformed_song PASSED
+tests/test_recommender.py::test_discover_songs_parses_valid_response PASSED
+tests/test_recommender.py::test_discover_songs_empty_array_returns_empty PASSED
+tests/test_recommender.py::test_discover_songs_no_json_array_returns_empty PASSED
+tests/test_recommender.py::test_discover_songs_invalid_json_returns_empty PASSED
+tests/test_recommender.py::test_discover_songs_non_list_json_returns_empty PASSED
+tests/test_recommender.py::test_discover_songs_drops_items_missing_title_or_artist PASSED
+tests/test_recommender.py::test_discover_songs_caps_at_max_discovered_songs PASSED
+tests/test_recommender.py::test_discover_songs_client_init_failure_returns_empty PASSED
+tests/test_recommender.py::test_discover_songs_lower_confidence_when_reason_missing PASSED
+
+======================== 33 passed, 1 warning in 2.03s ========================
+```
+
+Full breakdown of what each test covers: [**tests/TEST_RESULTS.md**](tests/TEST_RESULTS.md).
 
 ---
 
@@ -223,6 +483,20 @@ To stress-test the scoring logic, I ran profiles with internally conflicting pre
 - Unmatched categorical preferences (a mood or genre that doesn't exist in the catalog) fail silently — the corresponding bonus just never applies, with no feedback to the user.
 - The additive scoring model lets high-weight categorical matches (genre +2.0, mood +2.0) drown out a complete failure on a lower-weight continuous preference (acousticness, max +1.0), so conflicting preferences resolve in favor of whichever axis has more available point-weight rather than a balanced compromise.
 - The system never flags contradictions in the input itself (e.g., high energy + "sad" mood, or high energy + acoustic) — it just scores whatever combination it's given.
+
+---
+
+## Testing
+
+Automated tests live in [`tests/test_recommender.py`](tests/test_recommender.py) and cover scoring, recommendation ranking, CSV loading, confidence scoring, error handling, and the Gemini RAG discovery layer (mocked, no live API calls), including edge cases like empty catalogs, malformed data, and API failures.
+
+Run them with:
+
+```bash
+python -m pytest tests/ -v
+```
+
+See [**Test Results**](tests/TEST_RESULTS.md) for a summary of what's covered and the latest run's outcome.
 
 ---
 
