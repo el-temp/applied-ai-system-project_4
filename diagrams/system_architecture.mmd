@@ -8,7 +8,7 @@ flowchart TD
     subgraph PROCESS["2. PROCESS"]
         LOADER["load_songs()\nsrc/recommender.py"]
         SCORER["score_song() / recommend_songs()\nrule-based scoring engine"]
-        AGENT["discover_songs_with_rag()\nClaude agent + web_search tool"]
+        AGENT["discover_songs_with_rag()\nGemini agent + Google Search grounding"]
         QUERY["_build_search_query()\nturns profile into NL search query"]
     end
 

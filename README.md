@@ -1,86 +1,97 @@
-# 🎵 Music Recommender Simulation
+# 🎵 Music Recommender Simulation + RAG Discovery
 
-## Project Summary
+## Original Project (Module 3): Music Recommender Simulation
 
-In this project you will build and explain a small music recommender system.
+This project builds on **Module 3: Music Recommender Simulation**, whose original goal was to represent songs and a user "taste profile" as data, then design a rule-based scoring function that turns those profiles into ranked recommendations from a small local catalog (`data/songs.csv`). The original capabilities were entirely deterministic: it scored every song in the catalog against a user's favorite genre, favorite mood, target energy, and acoustic preference, then returned the top-K matches with a plain-language breakdown of why each song scored the way it did.
 
-Your goal is to:
-
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-Replace this paragraph with your own summary of what your version does.
+This repo extends that Module 3 foundation with a **RAG-based discovery feature**: on top of the original rule-based scorer, the system now also queries a Google Gemini model with web-search grounding to suggest real songs that fit the user's taste profile but aren't already in the local catalog.
 
 ---
 
-## How The System Works
+## Title and Summary
 
-Explain your design in plain language.
+**Music Recommender Simulation + Gemini-Powered Discovery**
 
-Some prompts to answer:
+This project simulates how a real-world music recommender turns stated user preferences into ranked song suggestions, and then goes one step further by using a free-tier LLM (Gemini) with live web search to surface songs *outside* the local catalog that a purely rule-based system could never recommend, since it can only rank what it already has. This matters because it demonstrates both sides of modern recommenders in one small system: the transparent, auditable scoring logic real systems still rely on for their core catalog, and the generative/retrieval layer that lets platforms like Spotify or YouTube Music suggest things you haven't heard yet.
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
-
-You can include a simple diagram or bullet list if helpful.
-
-## Response:
-To recomend songs the system will use genre, mood, energy, and accousticness.
-
-The user profile stores information for favorite genre, favorite mood, target energy, and a boolean for if they like accoustics which can be used as a benchmark for recomendation.
-
-For the text comparison like mood and energy points will be added if they match. Since accousticness is only stored as a boolean if that is set to true then the accoustincess will simply be added and if it is false it won't be added at all or maybe even subtracted. For energy point will be calculated as adding 1 -|energy-target energy|.
-
-Songs that score higher points will be recomended first.
-
-This system may result in too much bias being focused on genre and mood(could potentially be remedied by having user rank which metric they value more )
 ---
 
-## Getting Started
+## Architecture Overview
 
-### Setup
+See [`diagrams/system_architecture.mmd`](diagrams/system_architecture.mmd) for the full diagram. In short, the system has four stages:
 
-1. Create a virtual environment (optional but recommended):
+1. **Input** — A `UserProfile`-shaped dict (`favorite_genre`, `favorite_mood`, `target_energy`, `likes_acoustic`) and the local `data/songs.csv` catalog.
+2. **Process** — Two parallel paths consume the same input:
+   - `load_songs()` → `score_song()` / `recommend_songs()`: the deterministic rule-based scoring engine (Module 3 logic, unchanged).
+   - `_build_search_query()` → `discover_songs_with_rag()`: converts the numeric/boolean profile into a natural-language search phrase, then sends it to Gemini (with Google Search grounding) to find real songs outside the catalog.
+3. **Output** — The scored top-K catalog recommendations and the (at most 2) discovered songs are both printed to the console by `src/main.py`.
+4. **Checking** — `tests/test_recommender.py` unit-tests the scoring logic; `scripts/verify_rag_reliability.py` repeatedly calls the Gemini discovery path to check it never exceeds the 2-song cap and that repeated runs on the same profile tend to agree (Jaccard similarity), since LLM output isn't deterministic the way the scorer is.
+
+The key design point the diagram makes visible: the rule-based path and the AI path are independent and additive. If the Gemini call fails or the quota is exhausted, `discover_songs_with_rag()` returns `[]` and the rest of the system (catalog scoring, CLI output) is unaffected.
+
+---
+
+## Setup Instructions
+
+1. **Clone the repo and create a virtual environment:**
 
    ```bash
    python -m venv .venv
-   source .venv/bin/activate      # Mac or Linux
-   .venv\Scripts\activate         # Windows
+   ```
 
-2. Install dependencies
+   Activate it:
 
-```bash
-pip install -r requirements.txt
-```
+   ```powershell
+   # Windows (PowerShell)
+   .\.venv\Scripts\Activate.ps1
+   ```
 
-3. Run the app:
+   ```bash
+   # Mac/Linux
+   source .venv/bin/activate
+   ```
 
-```bash
-python -m src.main
-```
+2. **Install dependencies:**
 
-### Running Tests
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Run the starter tests with:
+3. **Get a free Gemini API key** from [aistudio.google.com/apikey](https://aistudio.google.com/apikey), then set it as an environment variable so `discover_songs_with_rag()` can authenticate:
 
-```bash
-pytest
-```
+   ```powershell
+   $env:GEMINI_API_KEY = "your-key-here"
+   ```
 
-You can add more tests in `tests/test_recommender.py`.
+   (Or add that line to the bottom of `.venv\Scripts\Activate.ps1` so it's set automatically every time you activate this venv.)
+
+4. **Run the app:**
+
+   ```bash
+   python -m src.main
+   ```
+
+   By default, only one profile ("High-Energy Pop") is active in `src/main.py` to keep free-tier API usage low; the rest are commented out and can be re-enabled as needed.
+
+5. **Run the tests:**
+
+   ```bash
+   pytest
+   ```
+
+6. **(Optional) Check RAG reliability:**
+
+   ```bash
+   python scripts/verify_rag_reliability.py --runs 3
+   ```
 
 ---
 
-## Sample Recommendation Output
+## Sample Interactions
 
-### Profile 1: High-Energy Pop
+### Example 1 — Catalog scoring: High-Energy Pop
 
-`{'favorite_genre': 'pop', 'favorite_mood': 'happy', 'target_energy': 0.9, 'likes_acoustic': False}`
+Input: `{'favorite_genre': 'pop', 'favorite_mood': 'happy', 'target_energy': 0.9, 'likes_acoustic': False}`
 
 ```
 1. Sunrise City by Neon Echo — Score: 5.74
@@ -93,24 +104,11 @@ You can add more tests in `tests/test_recommender.py`.
    - genre match (+2.0)
    - energy closeness (+1.0)
    - non-acoustic match (+0.9)
-
-3. Rooftop Lights by Indigo Parade — Score: 3.51
-   - mood match (+2.0)
-   - energy closeness (+0.9)
-   - non-acoustic match (+0.7)
-
-4. Iron Fists by Grey Anvil — Score: 1.90
-   - energy closeness (+0.9)
-   - non-acoustic match (+1.0)
-
-5. City Pulse by DJ Solstice — Score: 1.90
-   - energy closeness (+1.0)
-   - non-acoustic match (+0.9)
 ```
 
-### Profile 2: Chill Lofi
+### Example 2 — Catalog scoring: Chill Lofi
 
-`{'favorite_genre': 'lofi', 'favorite_mood': 'chill', 'target_energy': 0.3, 'likes_acoustic': True}`
+Input: `{'favorite_genre': 'lofi', 'favorite_mood': 'chill', 'target_energy': 0.3, 'likes_acoustic': True}`
 
 ```
 1. Library Rain by Paper Lanterns — Score: 5.81
@@ -124,52 +122,34 @@ You can add more tests in `tests/test_recommender.py`.
    - mood match (+2.0)
    - energy closeness (+0.9)
    - acoustic match (+0.7)
-
-3. Spacewalk Thoughts by Orbit Bloom — Score: 3.90
-   - mood match (+2.0)
-   - energy closeness (+1.0)
-   - acoustic match (+0.9)
-
-4. Focus Flow by LoRoom — Score: 3.68
-   - genre match (+2.0)
-   - energy closeness (+0.9)
-   - acoustic match (+0.8)
-
-5. Golden Hour Drive by Vinyl Static — Score: 1.95
-   - energy closeness (+1.0)
-   - acoustic match (+0.9)
 ```
 
-### Profile 3: Deep Intense Rock
+### Example 3 — Gemini RAG discovery (illustrative output shape)
 
-`{'favorite_genre': 'rock', 'favorite_mood': 'intense', 'target_energy': 0.85, 'likes_acoustic': False}`
+Input: same "High-Energy Pop" profile above. `_build_search_query()` turns it into the phrase `"high-energy, upbeat pop songs with a happy mood, non-acoustic/produced sound"`, which is sent to Gemini with Google Search grounding.
 
 ```
-1. Storm Runner by Voltline — Score: 5.84
-   - genre match (+2.0)
-   - mood match (+2.0)
-   - energy closeness (+0.9)
-   - non-acoustic match (+0.9)
+Discovering additional songs outside the catalog (RAG + web search)...
 
-2. Gym Hero by Max Pulse — Score: 3.87
-   - mood match (+2.0)
-   - energy closeness (+0.9)
-   - non-acoustic match (+0.9)
+You might also like (not in our catalog):
 
-3. City Pulse by DJ Solstice — Score: 1.89
-   - energy closeness (+1.0)
-   - non-acoustic match (+0.9)
-
-4. Iron Fists by Grey Anvil — Score: 1.85
-   - energy closeness (+0.9)
-   - non-acoustic match (+1.0)
-
-5. Sunrise City by Neon Echo — Score: 1.79
-   - energy closeness (+1.0)
-   - non-acoustic match (+0.8)
+- [Title] by [Artist]
+   - [one-sentence reason it fits the profile, generated by Gemini]
 ```
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or demo video link here -->
+> Note: this example shows the *shape* of a real discovery response rather than a captured live one — the free-tier Gemini quota was exhausted while writing this README (see the 429 `RESOURCE_EXHAUSTED` error surfaced by the app), which the code handles by printing the error and falling back to "(No additional songs discovered.)" rather than crashing. Once quota resets, running `python -m src.main` reproduces this section with a real title/artist/reason.
+
+---
+
+## Design Decisions
+
+- **Rule-based scoring kept separate from the LLM layer.** The original Module 3 scorer (`score_song`, `recommend_songs`) is untouched by the Gemini addition. Trade-off: this means the two recommendation sources can disagree or even suggest genre-mismatched songs from the AI side, but it keeps the catalog ranking fully deterministic, auditable, and testable with plain unit tests — properties an LLM-based scorer would give up.
+- **Gemini over a paid API.** The RAG discovery step needed a model with live web-search grounding, but this is a classroom project, so a free-tier model (Google Gemini, `gemini-flash-lite-latest`) was chosen over a paid option to keep the project runnable without a billing account. Trade-off: free-tier rate limits are low and grounding requests have their own tighter quota, so the discovery feature can and does occasionally fail with `429 RESOURCE_EXHAUSTED` — handled by catching the error and returning `[]` instead of crashing.
+- **Flash-Lite over full Flash.** Within Gemini's free tier, `gemini-flash-lite-latest` was picked over `gemini-flash-latest` for lower latency/cost per call, since this task (find ≤2 songs, short reason) doesn't need the larger model's extra reasoning quality. Trade-off: Flash-Lite is more prone to inconsistent picks across repeated runs on the same profile, which is exactly what `scripts/verify_rag_reliability.py` was built to measure.
+- **Hard cap of 2 discovered songs (`MAX_DISCOVERED_SONGS`).** Keeps prompts and outputs small (fewer tokens, less quota burned per run) and keeps the "you might also like" section a small supplement rather than a competing recommendation list.
+- **Terse prompt strings.** The Gemini prompt was deliberately rewritten to be a single compact line (comma-separated catalog instead of a bulleted list, abbreviated JSON-shape instructions) purely to reduce input tokens per call, since free-tier quota is the binding constraint, not response quality.
+- **Only one profile active by default in `src/main.py`.** With six total test profiles, running all of them each time would multiply API calls (and quota risk) by 6x for no benefit during normal development; the rest are commented out rather than deleted so they're easy to restore for a full test pass.
+- **Fail-soft, not fail-loud.** `discover_songs_with_rag()` catches API errors and JSON-parsing failures and returns `[]` rather than raising, so a quota error or a malformed model response never takes down the whole CLI run — the catalog-based recommendations still print either way.
 
 ---
 
@@ -210,18 +190,6 @@ To stress-test the scoring logic, I ran profiles with internally conflicting pre
    - genre match (+2.0)
    - energy closeness (+0.9)
    - non-acoustic match (+0.8)
-
-3. Iron Fists by Grey Anvil — Score: 1.90
-   - energy closeness (+0.9)
-   - non-acoustic match (+1.0)
-
-4. City Pulse by DJ Solstice — Score: 1.90
-   - energy closeness (+1.0)
-   - non-acoustic match (+0.9)
-
-5. Storm Runner by Voltline — Score: 1.89
-   - energy closeness (+1.0)
-   - non-acoustic match (+0.9)
 ```
 
 **Observation:** No song in the catalog has mood "sad," so the mood match bonus never fires for anyone. The system silently falls back to genre + energy + acousticness and never signals that "sad" was an impossible target — it just quietly ignores that preference. This isn't really "tricked," but it reveals that unmatched categorical preferences fail silently instead of surfacing a warning to the user.
@@ -229,30 +197,6 @@ To stress-test the scoring logic, I ran profiles with internally conflicting pre
 #### Adversarial Profile 2: Nonexistent Genre
 
 `{'favorite_genre': 'polka', 'favorite_mood': 'happy', 'target_energy': 0.5, 'likes_acoustic': False}` — genre doesn't exist in the catalog at all.
-
-```
-1. Sunrise City by Neon Echo — Score: 3.50
-   - mood match (+2.0)
-   - energy closeness (+0.7)
-   - non-acoustic match (+0.8)
-
-2. Rooftop Lights by Indigo Parade — Score: 3.39
-   - mood match (+2.0)
-   - energy closeness (+0.7)
-   - non-acoustic match (+0.7)
-
-3. Backyard Games by Kidcore Kingdom — Score: 1.67
-   - energy closeness (+0.8)
-   - non-acoustic match (+0.8)
-
-4. Slow Burn by Velvet Aria — Score: 1.55
-   - energy closeness (+0.9)
-   - non-acoustic match (+0.6)
-
-5. City Pulse by DJ Solstice — Score: 1.54
-   - energy closeness (+0.6)
-   - non-acoustic match (+0.9)
-```
 
 **Observation:** Same failure mode as above — an impossible genre just means the +2.0 genre bonus never applies to anyone, so the system quietly recommends based on mood/energy/acousticness alone. The recommender never detects or reports that "polka" isn't a real option; it degrades gracefully but silently, which could mislead a user into thinking the recommendations reflect their genre preference when they don't at all.
 
@@ -270,21 +214,9 @@ To stress-test the scoring logic, I ran profiles with internally conflicting pre
 2. Coffee Shop Stories by Slow Stereo — Score: 1.26
    - energy closeness (+0.4)
    - acoustic match (+0.9)
-
-3. Golden Hour Drive by Vinyl Static — Score: 1.25
-   - energy closeness (+0.3)
-   - acoustic match (+0.9)
-
-4. Library Rain by Paper Lanterns — Score: 1.21
-   - energy closeness (+0.3)
-   - acoustic match (+0.9)
-
-5. Spacewalk Thoughts by Orbit Bloom — Score: 1.20
-   - energy closeness (+0.3)
-   - acoustic match (+0.9)
 ```
 
-**Observation:** This is the most interesting case. Even though the user asked for `likes_acoustic: True`, "Iron Fists" wins by a wide margin (5.00 vs 1.26) purely because it perfectly matches genre and mood while completely failing the acoustic preference (acoustic score of 0.0, the worst possible). Meanwhile, songs #2–5 satisfy the acoustic preference well (+0.9) but score far lower overall because they miss genre/mood. This exposes a real weight-balance issue: the additive scoring lets two +2.0 categorical bonuses (genre + mood, worth 4.0 combined) completely dominate and mask a total failure on another axis (acousticness, worth at most 1.0). A user with truly conflicting preferences gets a recommendation that satisfies only part of what they asked for, with no indication that a tradeoff was made.
+**Observation:** This is the most interesting case. Even though the user asked for `likes_acoustic: True`, "Iron Fists" wins by a wide margin (5.00 vs 1.26) purely because it perfectly matches genre and mood while completely failing the acoustic preference (acoustic score of 0.0, the worst possible). This exposes a real weight-balance issue: the additive scoring lets two +2.0 categorical bonuses (genre + mood, worth 4.0 combined) completely dominate and mask a total failure on another axis (acousticness, worth at most 1.0). A user with truly conflicting preferences gets a recommendation that satisfies only part of what they asked for, with no indication that a tradeoff was made.
 
 ### Summary of what the adversarial testing revealed
 
@@ -300,25 +232,16 @@ To stress-test the scoring logic, I ran profiles with internally conflicting pre
 - It does not understand lyrics or language.
 - **Energy "dead zones" underserve moderate-energy users.** The catalog's energy values cluster into a low band (0.28–0.45) and a high band (0.75–0.97), with gaps of 0.10–0.13 in the middle (only 2 songs sit between 0.45 and 0.75). A user targeting `energy=0.6` can never score as well on the energy axis as a user targeting `0.3` or `0.9`, purely because of catalog density — the system never flags this, so it presents a structurally worse recommendation with the same confidence as a well-matched one.
 - **Genre/mood matching is exact-string and binary, which reinforces filter bubbles.** 12 of 14 genres and 9 of 13 moods appear only once in the catalog, and there's no notion of genre/mood *similarity* (`"pop"`, `"indie pop"`, and `"dream pop"` are totally unrelated to the scorer). A niche-taste user gets at most one song that can ever earn the genre/mood bonus, and the system never surfaces adjacent styles as a bridge — it only ever reinforces the exact label a user typed, never nudges them toward related music.
-- **Categorical bonuses (genre +2, mood +2) outweigh continuous features (energy, acousticness, each capped at +1).** This means two label matches will beat a perfect audio-feature match almost every time (confirmed in testing: a song with 0% acoustic match against an acoustic-loving user's stated preference still won by a wide margin because it matched genre + mood). Users whose taste is really about *feel* rather than a genre/mood tag are structurally shortchanged.
+- **Categorical bonuses (genre +2, mood +2) outweigh continuous features (energy, acousticness, each capped at +1).** This means two label matches will beat a perfect audio-feature match almost every time. Users whose taste is really about *feel* rather than a genre/mood tag are structurally shortchanged.
 - **Small-catalog artist concentration compounds the genre bias.** Two artists ("Neon Echo," "LoRoom") each have 2 of the catalog's 17 songs; for the 3-song "lofi" genre, that means one artist supplies two-thirds of the recommendations for anyone who likes lofi.
-- **No diversity or exploration mechanism.** Scoring is fully deterministic, so a given profile always returns the exact same top 5, with no randomness or "you might also like" cross-genre logic — this is a textbook filter bubble: stated preferences are reinforced, never challenged or broadened.
+- **No diversity or exploration mechanism** in the catalog scorer — a given profile always returns the exact same top 5, with no randomness or cross-genre "you might also like" logic. The Gemini discovery layer partially addresses this, but is itself constrained to at most 2 songs and free-tier rate limits.
 - **Unmatched/impossible preferences fail silently** (see Experiments section) — a genre or mood that doesn't exist in the catalog just contributes nothing to the score, with no warning to the user that part of their profile was ignored.
-
-You will go deeper on this in your model card.
+- **The RAG discovery layer is not fully deterministic or always available.** LLM output can vary run-to-run (measured via `scripts/verify_rag_reliability.py`), and free-tier quota exhaustion (`429 RESOURCE_EXHAUSTED`) can cause it to silently return no discovered songs at all.
 
 ---
 
 ## Reflection
 
-Read and complete `model_card.md`:
+Read the full model card: [**Model Card**](model_card.md)
 
-[**Model Card**](model_card.md)
-
-Write 1 to 2 paragraphs here about what you learned:
-
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
-
-
-
+Building the RAG discovery layer on top of the Module 3 scorer made the contrast between the two recommendation paradigms concrete: the rule-based scorer is fully explainable and reproducible but structurally capped by whatever's in the catalog, while the LLM-plus-search layer can genuinely discover things outside that catalog but trades away determinism, explainability by inspection, and free availability (rate limits, quota). It also made clear how much of an LLM-based feature's real-world reliability comes down to guardrails around the model call itself — capping output size, handling rate-limit errors gracefully, and verifying run-to-run consistency — rather than the prompt alone. That's a dimension of bias/unfairness this project didn't have to grapple with in Module 3, since a deterministic scorer's biases are static and auditable, whereas an LLM's search-grounded picks could favor certain genres/artists based on what's more visible on the web rather than what best fits the user.

@@ -10,8 +10,8 @@ times and checks two things:
    measured as the average pairwise Jaccard similarity (on normalized
    "title|artist" pairs) across all runs for a profile.
 
-Requires ANTHROPIC_API_KEY to be set in the environment, since it makes
-real calls to discover_songs_with_rag().
+Requires GEMINI_API_KEY (or GOOGLE_API_KEY) to be set in the environment,
+since it makes real calls to discover_songs_with_rag().
 
 Usage:
     python scripts/verify_rag_reliability.py [--runs N] [--profile NAME]

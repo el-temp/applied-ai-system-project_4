@@ -21,37 +21,39 @@ PROFILES = {
         "target_energy": 0.9,
         "likes_acoustic": False,
     },
-    "Chill Lofi": {
-        "favorite_genre": "lofi",
-        "favorite_mood": "chill",
-        "target_energy": 0.3,
-        "likes_acoustic": True,
-    },
-    "Deep Intense Rock": {
-        "favorite_genre": "rock",
-        "favorite_mood": "intense",
-        "target_energy": 0.85,
-        "likes_acoustic": False,
-    },
-    # Adversarial / edge case profiles
-    "Adversarial: High Energy + Sad Mood": {
-        "favorite_genre": "pop",
-        "favorite_mood": "sad",
-        "target_energy": 0.9,
-        "likes_acoustic": False,
-    },
-    "Adversarial: Nonexistent Genre": {
-        "favorite_genre": "polka",
-        "favorite_mood": "happy",
-        "target_energy": 0.5,
-        "likes_acoustic": False,
-    },
-    "Adversarial: Extreme Energy + Acoustic Conflict": {
-        "favorite_genre": "metal",
-        "favorite_mood": "angry",
-        "target_energy": 1.0,
-        "likes_acoustic": True,
-    },
+    # Remaining profiles commented out to limit Gemini API usage.
+    # Uncomment as needed.
+    # "Chill Lofi": {
+    #     "favorite_genre": "lofi",
+    #     "favorite_mood": "chill",
+    #     "target_energy": 0.3,
+    #     "likes_acoustic": True,
+    # },
+    # "Deep Intense Rock": {
+    #     "favorite_genre": "rock",
+    #     "favorite_mood": "intense",
+    #     "target_energy": 0.85,
+    #     "likes_acoustic": False,
+    # },
+    # # Adversarial / edge case profiles
+    # "Adversarial: High Energy + Sad Mood": {
+    #     "favorite_genre": "pop",
+    #     "favorite_mood": "sad",
+    #     "target_energy": 0.9,
+    #     "likes_acoustic": False,
+    # },
+    # "Adversarial: Nonexistent Genre": {
+    #     "favorite_genre": "polka",
+    #     "favorite_mood": "happy",
+    #     "target_energy": 0.5,
+    #     "likes_acoustic": False,
+    # },
+    # "Adversarial: Extreme Energy + Acoustic Conflict": {
+    #     "favorite_genre": "metal",
+    #     "favorite_mood": "angry",
+    #     "target_energy": 1.0,
+    #     "likes_acoustic": True,
+    # },
 }
 
 
