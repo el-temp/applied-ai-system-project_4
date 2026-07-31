@@ -137,11 +137,11 @@ MAX_DISCOVERED_SONGS = 2
 
 def discover_songs_with_rag(user_prefs: Dict, catalog_songs: List[Dict], k: int = MAX_DISCOVERED_SONGS) -> List[Dict]:
     """
-    Uses the free-tier Gemini API with Google Search grounding to look up
-    real songs matching the user's preferences that are not present in the
-    local catalog. Returns a list of dicts with "title", "artist", and
-    "reason", or an empty list on failure (e.g. missing API credentials or
-    an unparsable response).
+    Uses the free-tier Gemini API (from its own trained knowledge, no web
+    search grounding) to look up real songs matching the user's preferences
+    that are not present in the local catalog. Returns a list of dicts with
+    "title", "artist", and "reason", or an empty list on failure (e.g.
+    missing API credentials or an unparsable response).
 
     Always returns at most MAX_DISCOVERED_SONGS (2) songs, regardless of `k`.
 
@@ -164,10 +164,7 @@ def discover_songs_with_rag(user_prefs: Dict, catalog_songs: List[Dict], k: int 
         response = client.models.generate_content(
             model="gemini-flash-lite-latest",
             contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                max_output_tokens=512,
-            ),
+            config=types.GenerateContentConfig(max_output_tokens=512),
         )
     except (genai_errors.APIError, TypeError) as e:
         print(f"[discover_songs_with_rag] API call failed: {e}")
