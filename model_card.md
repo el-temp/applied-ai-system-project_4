@@ -114,3 +114,11 @@ Prompts:
 - How this changed the way you think about music recommendation apps 
 
 I learend about the complexity in accomedating a very varied medium of music and how to handle nearly infinite user preferences. I don;t really use music recomndation apps but I am now more appreicative of the work that went into making them. 
+
+## Reliability
+
+Thw ai turned out more reliable than I thought. When I was planning the implementation with claude I was warned that result may vary per run but upon testing it and reviewing the results myself it was consistently give the same results each time.
+
+## AI  Colaboration
+
+Ai was used extensiviely when coding to due to being new with working with ai and implementing it into a program. Afterwards I often asked the ai for summaries of how the code works so I can understand and it in case changes need to be made later. Addtionally sumaries and may git comit messages were done by ai to save on time and ensure thoroughness. These were all manually reviwed in case the AI missed any important details.
