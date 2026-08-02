@@ -33,6 +33,10 @@ Prompts:
 Avoid code here. Pretend you are explaining the idea to a friend who does not program.
 
 Songs are scored by giving 2 points for a genre or mood macth, 1 point for accoustisic preference match, and up to one point depending if the energy of the song is an exact match to the desried enegery represented by a numerical value between 0 and 1. These points are added together and the top 5 highest scoring songs are recomended with their point breakdown. I created addition user prfoiles to test for edge cases but most of the core logic for recomendation was not pre built.
+
+The "confidence" percentage shown next to each catalog recommendation is just that score turned into a percentage: score divided by 6 (the max possible score), capped between 0% and 100%. So a song hitting genre, mood, energy, and acoustic preference perfectly shows close to 100% confidence, and a song matching almost nothing shows a low percentage.
+
+The Gemini-discovered songs (the "you might also like" section) get a confidence number too, but it works completely differently — it isn't based on how well the song matches the user's taste at all. It's based on whether Gemini's response looked complete: if the song is missing a title or artist it gets dropped, if it has a title/artist but no explanation it gets 50%, and if it has a title, artist, and reason it gets 80%. It's capped at 80% instead of 100% because these picks come from Gemini's own memorized knowledge with no web search backing them up, so the system never claims to be fully certain about a discovered song the way it can be about a catalog score it computed itself.
 ## 4. Data  
 
 Describe the dataset the model uses.  
