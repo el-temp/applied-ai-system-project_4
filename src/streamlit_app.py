@@ -93,9 +93,8 @@ st.markdown(
     .stButton>button:hover{ box-shadow: 0 10px 30px rgba(138,43,226,0.12), 0 0 30px rgba(0,240,255,0.06); transform: translateY(-2px); }
 
     /* Make the form submit button text bright blue for visibility */
-    /* Make the form submit button text black (user request) */
-    .stForm .stButton>button { color: #000000 !important; font-weight:700 }
-    .stForm .stButton>button:hover { text-shadow: none }
+    .stForm .stButton>button { color: var(--bright-blue) !important; font-weight:700 }
+    .stForm .stButton>button:hover { text-shadow: 0 0 8px rgba(0,170,255,0.25) }
 
     /* Expander styling */
     .stExpander {
