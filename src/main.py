@@ -31,7 +31,7 @@ PROFILES = {
     # Uncomment as needed.
     # "Chill Lofi": {
     #     "favorite_genre": "lofi",
-    #     "favorite_mood": "chill",
+    #    "favorite_mood": "chill",
     #     "target_energy": 0.3,
     #     "likes_acoustic": True,
     # },
